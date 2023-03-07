@@ -1,15 +1,22 @@
-const puppeteer = require('puppeteer');
-const {parseISO, compareAsc, isBefore, format} = require('date-fns')
-require('dotenv').config();
+const puppeteer = require("puppeteer");
+const { parseISO, compareAsc, isBefore, format } = require("date-fns");
+require("dotenv").config();
 
-const {delay, sendEmail, logStep} = require('./utils');
-const {siteInfo, loginCred, IS_PROD, NEXT_SCHEDULE_POLL, MAX_NUMBER_OF_POLL, NOTIFY_ON_DATE_BEFORE} = require('./config');
+const { delay, sendEmail, logStep } = require("./utils");
+const {
+  siteInfo,
+  loginCred,
+  IS_PROD,
+  NEXT_SCHEDULE_POLL,
+  MAX_NUMBER_OF_POLL,
+  NOTIFY_ON_DATE_BEFORE,
+} = require("./config");
 
 let isLoggedIn = false;
-let maxTries = MAX_NUMBER_OF_POLL
+let maxTries = MAX_NUMBER_OF_POLL;
 
 const login = async (page) => {
-  logStep('logging in');
+  logStep("logging in");
   await page.goto(siteInfo.LOGIN_URL);
 
   const form = await page.$("form#sign_in_form");
@@ -27,52 +34,51 @@ const login = async (page) => {
   await page.waitForNavigation();
 
   return true;
-}
+};
 
 const notifyMe = async (earliestDate) => {
-  const formattedDate = format(earliestDate, 'dd-MM-yyyy');
+  const formattedDate = format(earliestDate, "dd-MM-yyyy");
   logStep(`sending an email to schedule for ${formattedDate}`);
   await sendEmail({
     subject: `We found an earlier date ${formattedDate}`,
-    text: `Hurry and schedule for ${formattedDate} before it is taken.`
-  })
-}
+    text: `Hurry and schedule for ${formattedDate} before it is taken.`,
+  });
+};
 
-const checkForSchedules = async (page) => {
-  logStep('checking for schedules');
-  await page.goto(siteInfo.APPOINTMENTS_JSON_URL);
+const checkForSchedules = async (page, facility) => {
+  logStep(`checking for schedules ${facility.name}`);
+  await page.goto(buildReq(facility.id));
 
   const originalPageContent = await page.content();
   const bodyText = await page.evaluate(() => {
-    return document.querySelector('body').innerText
+    return document.querySelector("body").innerText;
   });
 
-  try{
+  try {
     console.log(bodyText);
-    const parsedBody =  JSON.parse(bodyText);
+    const parsedBody = JSON.parse(bodyText);
 
-    if(!Array.isArray(parsedBody)) {
+    if (!Array.isArray(parsedBody)) {
       throw "Failed to parse dates, probably because you are not logged in";
     }
 
-    const dates =parsedBody.map(item => parseISO(item.date));
-    const [earliest] = dates.sort(compareAsc)
+    const dates = parsedBody.map((item) => parseISO(item.date));
+    const [earliest] = dates.sort(compareAsc);
 
     return earliest;
-  }catch(err){
+  } catch (err) {
     console.log("Unable to parse page JSON content", originalPageContent);
-    console.error(err)
+    console.error(err);
     isLoggedIn = false;
   }
-}
-
+};
 
 const process = async (browser) => {
   logStep(`starting process with ${maxTries} tries left`);
 
-  if(maxTries-- <= 0){
-    console.log('Reached Max tries')
-    return
+  if (maxTries-- <= 0) {
+    console.log("Reached Max tries");
+    return;
   }
 
   const page = await browser.newPage();
@@ -80,24 +86,38 @@ const process = async (browser) => {
   if(!isLoggedIn) {
      isLoggedIn = await login(page);
   }
-
-  const earliestDate = await checkForSchedules(page);
-  if(earliestDate && isBefore(earliestDate, parseISO(NOTIFY_ON_DATE_BEFORE))){
-    await notifyMe(earliestDate);
+  
+  for await(const facility of getFacilities()){
+    const earliestDate = await checkForSchedules(page, facility);
+    if (
+      earliestDate &&
+      isBefore(earliestDate, parseISO(NOTIFY_ON_DATE_BEFORE))
+    ) {
+      await notifyMe(earliestDate);
+    }
+    await delay(NEXT_SCHEDULE_POLL);
   }
+    await process(browser);
+};
 
-  await delay(NEXT_SCHEDULE_POLL)
+const getFacilities = () => {
+  return siteInfo.FACILITIES.split(",").map((item) => {
+    return { id: item.split("-")[0], name: item.split("-")[1] };
+  });
+};
 
-  await process(browser)
-}
-
+const buildReq = (id) => {
+  return `https://ais.usvisa-info.com/${siteInfo.COUNTRY_CODE}/niv/schedule/${siteInfo.SCHEDULE_ID}/appointment/days/${id}.json?appointments%5Bexpedite%5D=false`;
+};
 
 (async () => {
-  const browser = await puppeteer.launch(!IS_PROD ? {headless: false}: undefined);
+  const browser = await puppeteer.launch(
+    !IS_PROD ? { headless: false } : undefined
+  );
 
-  try{
+  try {
     await process(browser);
-  }catch(err){
+  } catch (err) {
     console.error(err);
   }
 
