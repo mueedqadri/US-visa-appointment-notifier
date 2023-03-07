@@ -95,7 +95,10 @@ const process = async (browser) => {
     ) {
       await notifyMe(earliestDate);
     }
-    await delay(NEXT_SCHEDULE_POLL);
+    let waitTime = Math.floor(getRandomArbitrary(1,NEXT_SCHEDULE_POLL)*1000);
+    
+    console.log(`Waiting for :${waitTime/1000}sec`)
+    await delay(waitTime);
   }
     await process(browser);
 };
@@ -105,6 +108,11 @@ const getFacilities = () => {
     return { id: item.split("-")[0], name: item.split("-")[1] };
   });
 };
+
+const getRandomArbitrary = (min, max) =>{
+  return Math.random() * (max - min) + min;
+}
+
 
 const buildReq = (id) => {
   return `https://ais.usvisa-info.com/${siteInfo.COUNTRY_CODE}/niv/schedule/${siteInfo.SCHEDULE_ID}/appointment/days/${id}.json?appointments%5Bexpedite%5D=false`;
