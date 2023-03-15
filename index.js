@@ -8,6 +8,7 @@ const {
   loginCred,
   IS_PROD,
   NEXT_SCHEDULE_POLL,
+  NEXT_TRY,
   MAX_NUMBER_OF_POLL,
   NOTIFY_ON_DATE_BEFORE,
 } = require("./config");
@@ -36,11 +37,11 @@ const login = async (page) => {
   return true;
 };
 
-const notifyMe = async (earliestDate) => {
+const notifyMe = async (earliestDate, facility) => {
   const formattedDate = format(earliestDate, "dd-MM-yyyy");
   logStep(`sending an email to schedule for ${formattedDate}`);
   await sendEmail({
-    subject: `We found an earlier date ${formattedDate}`,
+    subject: `We found an earlier date ${formattedDate} in ${facility}`,
     text: `Hurry and schedule for ${formattedDate} before it is taken.`,
   });
 };
@@ -93,14 +94,18 @@ const process = async (browser) => {
       earliestDate &&
       isBefore(earliestDate, parseISO(NOTIFY_ON_DATE_BEFORE))
     ) {
-      await notifyMe(earliestDate);
+      await notifyMe(earliestDate, facility.name);
     }
     let waitTime = Math.floor(getRandomArbitrary(1,NEXT_SCHEDULE_POLL)*1000);
     
     console.log(`Waiting for :${waitTime/1000}sec`)
     await delay(waitTime);
   }
+
+    console.log(`Waiting for :${NEXT_TRY}sec`)
+    await delay(NEXT_TRY*1000);
     await process(browser);
+  
 };
 
 const getFacilities = () => {

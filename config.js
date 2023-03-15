@@ -14,6 +14,7 @@ module.exports = {
     }
   },
   IS_PROD: process.env.NODE_ENV === 'prod',
+  NEXT_TRY: process.env.NEXT_TRY || 300, // default to 30 seconds
   NEXT_SCHEDULE_POLL: process.env.NEXT_SCHEDULE_POLL || 30, // default to 30 seconds
   MAX_NUMBER_OF_POLL: process.env.MAX_NUMBER_OF_POLL || 250, // number of polls before stopping
   NOTIFY_ON_DATE_BEFORE: process.env.NOTIFY_ON_DATE_BEFORE, // in ISO format i.e YYYY-MM-DD
